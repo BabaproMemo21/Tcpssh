@@ -1,37 +1,57 @@
-name: SSH via Localtonet
+name: Localtonet SSH Tüneli Aç
 
 on:
   workflow_dispatch:
-    inputs:
-      AUTH_TOKEN:
-        description: 'Localtonet AUTH_TOKEN'
-        required: true
 
 jobs:
-  deploy:
+  tunnel:
     runs-on: ubuntu-latest
+
     steps:
-      - name: SSH anahtarı oluştur
-        run: |
-          ssh-keygen -t ed25519 -f id_ed25519 -N ""
-          echo "🔑 Public Key:"
-          cat id_ed25519.pub
+    - name: Reposuz başla
+      run: echo "Başlıyoruz 🔧"
 
-      - name: Localtonet indir ve çalıştır
-        run: |
-          wget https://github.com/localtonet/cli/releases/latest/download/localtonet-linux-x64 -O lt
-          chmod +x lt
-          nohup ./lt tcp --token "${{ github.event.inputs.AUTH_TOKEN }}" --port 22 > tunnel.log 2>&1 &
-          sleep 10  # bağlantının oturması için bekle
+    - name: Localtonet indir ve çıkart
+      run: |
+        wget https://localtonet.com/download/localtonet-linux-x64.zip
+        unzip localtonet-linux-x64.zip
+        chmod +x lt
 
-      - name: Tünel Linkini ve SSH komutunu göster
-        run: |
-          echo "🌐 Localtonet Link:"
-          cat tunnel.log | grep -Eo 'tcp://[^\s]+' || echo "❌ Link bulunamadı"
-          echo "🔐 SSH Özel Anahtar:"
-          cat id_ed25519
-          echo "📦 SSH Bağlantı Komutu:"
-          LINK=$(grep -Eo 'tcp://[^\s]+' tunnel.log | head -n1)
-          HOST=$(echo $LINK | cut -d'/' -f3 | cut -d':' -f1)
-          PORT=$(echo $LINK | cut -d':' -f3)
-          echo "ssh -i id_ed25519 -o StrictHostKeyChecking=no -p $PORT ubuntu@$HOST"
+    - name: SSH anahtarlarını kur
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
+        echo "${{ secrets.SSH_PUB_KEY }}" > ~/.ssh/id_rsa.pub
+        chmod 600 ~/.ssh/id_rsa
+        chmod 644 ~/.ssh/id_rsa.pub
+        cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
+        chmod 600 ~/.ssh/authorized_keys
+
+    - name: SSH servisini başlat
+      run: |
+        sudo apt update
+        sudo apt install -y openssh-server
+        sudo service ssh start
+
+    - name: Localtonet tünelini başlat
+      run: |
+        nohup ./lt tcp --token "${{ secrets.AUTH_TOKEN }}" --port 22 > tunnel.log 2>&1 &
+        echo "Localtonet tüneli başlatıldı, link bekleniyor..."
+
+    - name: Bağlantı linkini göster
+      run: |
+        echo "Link oluşturuluyor... Lütfen 10 saniye bekleyin..."
+        sleep 10
+        echo "::group::Tünel Çıkışı"
+        cat tunnel.log
+        echo "::endgroup::"
+
+    - name: SSH ile bağlanmak için komut oluştur
+      run: |
+        echo "::group::SSH Key (PRIVATE)"
+        cat ~/.ssh/id_rsa
+        echo "::endgroup::"
+        echo "::group::SSH Bağlantı Komutu"
+        IPPORT=$(grep -oP 'tcp:\/\/\K[^\s]+' tunnel.log)
+        echo "ssh -i privatekey root@$IPPORT"
+        echo "::endgroup::"          echo "ssh -i id_ed25519 -o StrictHostKeyChecking=no -p $PORT ubuntu@$HOST"
