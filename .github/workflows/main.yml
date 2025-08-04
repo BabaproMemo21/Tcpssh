@@ -1,4 +1,4 @@
-name: Localtonet SSH Tunnel (Key gizli, whoami ve link)
+name: Localtonet SSH Tunnel (Fix grep regex)
 
 on:
   workflow_dispatch:
@@ -47,10 +47,7 @@ jobs:
         run: |
           echo "Tünel logu:"
           cat tunnel.log
-          LINK=$(grep -Eo 'tcp://[0-9a-zA-Z\.\-:]+' tunnel.log | head -n1)
-          if [ -z "$LINK" ]; then
-            LINK=$(grep -oP 'tcp://\K[^ ]+' tunnel.log | head -n1)
-          fi
+          LINK=$(grep -o 'tcp://[^ ]*' tunnel.log | head -n1)
           if [ -z "$LINK" ]; then
             echo "‼️ Localtonet bağlantı linki bulunamadı!"
             exit 1
