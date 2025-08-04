@@ -1,4 +1,4 @@
-name: Localtonet SSH
+name: Localtonet SSH Tunnel
 
 on:
   workflow_dispatch:
@@ -6,48 +6,48 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Localtonet Kurulumu
+    - name: İndir ve Kur
       run: |
-        wget https://github.com/localtonet/cli/releases/latest/download/localtonet-linux-amd64 -O lt
-        chmod +x lt
-        sudo mv lt /usr/local/bin/localtonet
+        wget https://localtonet.com/download/localtonet-linux-x64.zip
+        unzip localtonet-linux-x64.zip
+        chmod +x localtonet
+        mv localtonet lt
 
     - name: SSH Key Oluştur
+      id: keygen
       run: |
         ssh-keygen -t rsa -b 4096 -N "" -f id_rsa
         echo "::set-output name=pubkey::$(cat id_rsa.pub)"
-      id: keygen
+        echo "::set-output name=privkey::$(cat id_rsa)"
 
-    - name: SSH Key'i Ekle
+    - name: SSH Sunucusunu Kur ve Başlat
       run: |
-        mkdir -p ~/.ssh
-        echo "${{ steps.keygen.outputs.pubkey }}" >> ~/.ssh/authorized_keys
-        chmod 600 ~/.ssh/authorized_keys
-        echo "Authorized key eklendi"
-
-    - name: SSH Sunucusunu Aç
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y openssh-server
+        sudo apt-get update && sudo apt-get install -y openssh-server
         sudo systemctl start ssh
         sudo systemctl enable ssh
 
-    - name: Localtonet ile Bağlantıyı Başlat
+    - name: SSH Key’i Authorized Keys’e Ekle
       run: |
-        ./lt --token ${{ secrets.AUTH_TOKEN }} --port 22 > out.txt &
-        sleep 5
-        echo "::set-output name=sshlink::$(cat out.txt | grep ssh | tail -1)"
-      id: lt
+        mkdir -p ~/.ssh
+        echo "${{ steps.keygen.outputs.pubkey }}" >> ~/.ssh/authorized_keys
+        chmod 700 ~/.ssh
+        chmod 600 ~/.ssh/authorized_keys
 
-    - name: Bilgileri Yazdır
+    - name: Localtonet ile TCP Tunnel Aç
+      id: tunnel
       run: |
-        echo "🔑 Özel SSH Key:"
-        cat id_rsa
+        ./lt authtoken ${{ secrets.AUTH_TOKEN }}
+        nohup ./lt tcp --port 22 > tunnel.txt 2>&1 &
+        sleep 5
+        echo "::set-output name=link::$(grep -Eo '[^ ]+\.localto\.net:[0-9]+' tunnel.txt)"
+
+    - name: Çıktı Bilgisi Ver
+      run: |
+        echo "🔑 PRIVATE_KEY="
+        echo "${{ steps.keygen.outputs.privkey }}"
         echo ""
-        echo "📎 SSH Bağlantı Linki:"
-        echo "${{ steps.lt.outputs.sshlink }}"
+        echo "📎 Tünel Adresi = ${{ steps.tunnel.outputs.link }}"
         echo ""
-        echo "👉 SSH ile bağlanmak için komut:"
-        echo "ssh -i id_rsa user@host -p port"
+        echo "👉 SSH Komutu:"
+        echo "ssh -i private_key kullanıcı@${{ steps.tunnel.outputs.link }}"
