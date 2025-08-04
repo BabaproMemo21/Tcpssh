@@ -1,65 +1,37 @@
-name: Localtonet SSH Tunnel
+name: SSH via Localtonet
 
 on:
   workflow_dispatch:
+    inputs:
+      AUTH_TOKEN:
+        description: 'Localtonet AUTH_TOKEN'
+        required: true
 
 jobs:
-  run-tunnel:
+  deploy:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Localtonet indir ve aç
-      run: |
-        wget https://localtonet.com/download/localtonet-linux-x64.zip
-        unzip localtonet-linux-x64.zip
-        chmod +x localtonet
-        mv localtonet lt
+      - name: SSH anahtarı oluştur
+        run: |
+          ssh-keygen -t ed25519 -f id_ed25519 -N ""
+          echo "🔑 Public Key:"
+          cat id_ed25519.pub
 
-    - name: SSH key oluştur
-      id: keygen
-      run: |
-        ssh-keygen -t rsa -b 4096 -N "" -f id_rsa
-        echo "::set-output name=pubkey::$(cat id_rsa.pub)"
-        echo "::set-output name=privkey::$(cat id_rsa)"
+      - name: Localtonet indir ve çalıştır
+        run: |
+          wget https://github.com/localtonet/cli/releases/latest/download/localtonet-linux-x64 -O lt
+          chmod +x lt
+          nohup ./lt tcp --token "${{ github.event.inputs.AUTH_TOKEN }}" --port 22 > tunnel.log 2>&1 &
+          sleep 10  # bağlantının oturması için bekle
 
-    - name: SSH servisini kur ve başlat
-      run: |
-        sudo apt update
-        sudo apt install -y openssh-server
-        sudo systemctl enable ssh
-        sudo systemctl start ssh
-
-    - name: SSH public key'i authorized_keys'e ekle
-      run: |
-        mkdir -p ~/.ssh
-        echo "${{ steps.keygen.outputs.pubkey }}" >> ~/.ssh/authorized_keys
-        chmod 700 ~/.ssh
-        chmod 600 ~/.ssh/authorized_keys
-
-    - name: Localtonet TCP tünel başlat ve 6 saat açık tut
-      id: tunnel
-      run: |
-        nohup ./lt tcp --token ${{ secrets.AUTH_TOKEN }} --port 22 > tunnel.log 2>&1 &
-        echo "Localtonet tüneli başlatıldı, çıkış bekleniyor..."
-        for i in {1..360}; do
-          if grep -q "Status.*OK" tunnel.log; then
-            break
-          fi
-          sleep 1
-        done
-        link=$(grep -oP '[a-z0-9]+\.localto\.net:\d+' tunnel.log | head -n1)
-        echo "::set-output name=link::$link"
-        echo "Tünel linki: $link"
-        echo "Tünel 6 saat boyunca açık kalacak..."
-        sleep 21600
-
-    - name: Sonuçları göster
-      run: |
-        echo "🔑 Private key:"
-        echo "${{ steps.keygen.outputs.privkey }}"
-        echo ""
-        echo "📎 Localtonet tünel adresi:"
-        echo "${{ steps.tunnel.outputs.link }}"
-        echo ""
-        echo "👉 SSH ile bağlanmak için:"
-        echo "ssh -i id_rsa kullanıcı@${{ steps.tunnel.outputs.link }}"
+      - name: Tünel Linkini ve SSH komutunu göster
+        run: |
+          echo "🌐 Localtonet Link:"
+          cat tunnel.log | grep -Eo 'tcp://[^\s]+' || echo "❌ Link bulunamadı"
+          echo "🔐 SSH Özel Anahtar:"
+          cat id_ed25519
+          echo "📦 SSH Bağlantı Komutu:"
+          LINK=$(grep -Eo 'tcp://[^\s]+' tunnel.log | head -n1)
+          HOST=$(echo $LINK | cut -d'/' -f3 | cut -d':' -f1)
+          PORT=$(echo $LINK | cut -d':' -f3)
+          echo "ssh -i id_ed25519 -o StrictHostKeyChecking=no -p $PORT ubuntu@$HOST"
