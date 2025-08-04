@@ -1,4 +1,4 @@
-name: Localtonet SSH Tunnel (Non-root)
+name: Localtonet SSH Tunnel (Key gizli, whoami ve link)
 
 on:
   workflow_dispatch:
@@ -13,18 +13,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Gereken paketleri yükle (sudo ile)
+      - name: Gereken paketleri yükle
         run: |
           sudo apt update
           sudo apt install -y unzip openssh-server
 
-      - name: Localtonet indir ve aç (normal kullanıcı)
+      - name: Localtonet indir ve aç
         run: |
           wget https://localtonet.com/download/localtonet-linux-x64.zip
           unzip localtonet-linux-x64.zip
           chmod +x localtonet
 
-      - name: SSH anahtar oluştur (normal kullanıcı)
+      - name: SSH anahtar oluştur
         run: |
           ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -N ""
           mkdir -p ~/.ssh
@@ -32,30 +32,34 @@ jobs:
           chmod 700 ~/.ssh
           chmod 600 ~/.ssh/authorized_keys
 
-      - name: SSH servisini başlat (sudo ile)
+      - name: SSH servisini başlat
         run: |
           sudo systemctl enable ssh
           sudo systemctl start ssh
 
-      - name: Localtonet tünelini başlat (normal kullanıcı)
+      - name: Localtonet tünelini başlat
         run: |
           nohup ./localtonet tcp --token "${{ github.event.inputs.AUTH_TOKEN }}" --port 22 > tunnel.log 2>&1 &
           echo "Localtonet tüneli başlatıldı, bağlantı bekleniyor..."
-          sleep 15
+          sleep 30
 
-      - name: Bağlantı linkini al ve ssh komutunu yazdır
+      - name: Localtonet bağlantı linkini al
         run: |
-          LINK=$(grep -oP 'tcp://\K[^ ]+' tunnel.log | head -n1)
+          echo "Tünel logu:"
+          cat tunnel.log
+          LINK=$(grep -Eo 'tcp://[0-9a-zA-Z\.\-:]+' tunnel.log | head -n1)
           if [ -z "$LINK" ]; then
-            echo "‼️ Localtonet bağlantı linki bulunamadı."
+            LINK=$(grep -oP 'tcp://\K[^ ]+' tunnel.log | head -n1)
+          fi
+          if [ -z "$LINK" ]; then
+            echo "‼️ Localtonet bağlantı linki bulunamadı!"
             exit 1
           fi
-          HOST=$(echo $LINK | cut -d':' -f1)
+          HOST=$(echo $LINK | cut -d':' -f1 | sed 's/tcp:\/\///')
           PORT=$(echo $LINK | cut -d':' -f2)
-          echo "🔑 Private key (~/.ssh/id_rsa):"
-          cat ~/.ssh/id_rsa
           echo ""
           echo "📡 Localtonet bağlantı linki: $LINK"
+          echo "🔗 Localtonet indir: https://localtonet.com/download/localtonet-linux-x64.zip"
           echo ""
-          echo "💻 SSH ile bağlanmak için komut:"
-          echo "ssh -i ~/.ssh/id_rsa -p $PORT root@$HOST"
+          echo "💻 SSH ile bağlanmak için komut (local makinede):"
+          echo "ssh -i ~/.ssh/id_rsa -p $PORT root@$HOST 'whoami'"
