@@ -36,14 +36,10 @@ jobs:
         chmod 700 ~/.ssh
         chmod 600 ~/.ssh/authorized_keys
 
-    - name: Localtonet token ayarla
-      run: |
-        ./lt authtoken ${{ secrets.AUTH_TOKEN }}
-
     - name: Localtonet TCP tünel başlat ve 6 saat açık tut
       id: tunnel
       run: |
-        nohup ./lt tcp --port 22 > tunnel.log 2>&1 &
+        nohup ./lt tcp --token ${{ secrets.AUTH_TOKEN }} --port 22 > tunnel.log 2>&1 &
         echo "Localtonet tüneli başlatıldı, çıkış bekleniyor..."
         for i in {1..360}; do
           if grep -q "Status.*OK" tunnel.log; then
