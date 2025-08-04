@@ -1,4 +1,4 @@
-name: Localtonet SSH Tunnel (Fix grep regex)
+name: Localtonet SSH Tunnel (60s wait)
 
 on:
   workflow_dispatch:
@@ -41,7 +41,7 @@ jobs:
         run: |
           nohup ./localtonet tcp --token "${{ github.event.inputs.AUTH_TOKEN }}" --port 22 > tunnel.log 2>&1 &
           echo "Localtonet tüneli başlatıldı, bağlantı bekleniyor..."
-          sleep 30
+          sleep 60
 
       - name: Localtonet bağlantı linkini al
         run: |
