@@ -1,4 +1,4 @@
-name: Localtonet SSH Tunnel (60s wait)
+--tokenen Localtonet SSH Tunnel (60s wait)
 
 on:
   workflow_dispatch:
@@ -39,7 +39,7 @@ jobs:
 
       - name: Localtonet tünelini başlat
         run: |
-          nohup ./localtonet tcp --token "${{ github.event.inputs.AUTH_TOKEN }}" --port 22 > tunnel.log 2>&1 &
+          nohup ./localtonet token "${{ github.event.inputs.AUTH_TOKEN }}" > tunnel.log 2>&1 &
           echo "Localtonet tüneli başlatıldı, bağlantı bekleniyor..."
           sleep 60
 
